@@ -129,3 +129,46 @@ bots:
 
 ```
 
+## v2分支
+1. 支持处理多个告警规则
+2. 每个告警可在annotations中指定通知人和负责人
+3. 支持每个告警可设置要发送的机器人token
+4. 新增跳转按钮及链接、title、level
+5. 告警恢复时会触发恢复通知，增加触发时间和恢复时间
+6. 此expr为logQL，同样支持PromQL
+
+```yaml
+# 相关的规则设置定义在一个group下。在每一个group中我们可以定义多个告警规则(rule)
+groups:
+  # 组名。报警规则组名称
+- name: availability-monitoring
+  rules:
+  - alert: ServiceNoLogs
+    # expr：基于LogQL表达式告警触发条件，用于计算是否有时间序列满足该条件。
+    expr: |
+          absent_over_time({env="test", namespace="test",service_name="test-service"} [5m])
+    # for：评估等待时间，可选参数。用于表示只有当触发条件持续一段时间后才发送告警。在等待期间新产生告警的状态为pending。
+    for: 2m # for语句会使 Loki 服务等待指定的时间, 然后执行查询表达式。
+    # labels：自定义标签，允许用户指定要附加到告警上的一组附加标签。
+    labels:
+      # severity: 指定告警级别。有三种等级，分别为 warning, critical 和 emergency 。严重等级依次递增。
+      severity: critical
+      category: availability
+    # annotations: 附加信息，比如用于描述告警详细信息的文字等，annotations的内容在告警产生时会一同作为参数发送到Alertmanager。
+    annotations:
+      title: "该服务在过去5分钟内没有产生任何日志"
+      # 告警等级。内置有P0 P1 P2 P3 P4，也可自定义
+      level: P0
+      # 处理建议
+      handling: "消息挤压，重启该hub服务"
+      # 跳转链接
+      link: "http://127.0.0.1/grafana/d/aka/duo-job-ji-cheng-fu-wu-qi-jian-kong"
+      # 告警描述
+      description: "疑似消息积压导致宕机"
+      # 通知人，在飞书中需要指定openid，多个用逗号分隔。all代表所有人
+      openIds: all
+      # 负责人的openid
+      teams: ou_70d31b7942cfb673038292e43daaa9c3
+      # 群机器人token，不传时则使用默认配置的token
+      webHookToken: 90626006-60f1-44f7-9234-fe8d44f89256
+```

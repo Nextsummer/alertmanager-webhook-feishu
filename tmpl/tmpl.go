@@ -48,6 +48,24 @@ func init() {
 			return fmt.Sprintf("[%s](%s)", k, v)
 		},
 		"contains": strings.Contains,
+		"add": func(a, b int) int {
+			return a + b
+		},
+		"default": func(defaultValue, value interface{}) interface{} {
+			if value == nil || value == "" {
+				return defaultValue
+			}
+			return value
+		},
+		"replace": func(old, new, src string) string {
+			return strings.ReplaceAll(src, old, new)
+		},
+		"truncate": func(length int, str string) string {
+			if len(str) <= length {
+				return str
+			}
+			return str[:length] + "..."
+		},
 	}
 
 	// embed

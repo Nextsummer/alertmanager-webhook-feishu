@@ -14,7 +14,7 @@ import (
 )
 
 func getConf() *config.Config {
-	conf, err := config.Load("../config.yml")
+	conf, err := config.Load("D:\\itData\\code\\go\\github\\alertmanager-webhook-feishu\\config.example.yml")
 	if err != nil {
 		panic(err)
 	}
@@ -39,14 +39,23 @@ func TestBot_Send(t *testing.T) {
 	logrus.SetLevel(logrus.DebugLevel)
 	bot, err := New(getBotConf(), nil)
 	require.Nil(t, err)
-	bot.openIDs = []string{"ou_177f84317c6ee52630edf335d5f8a6fc", "ou_177f84317c6ee52630edf335d5f8a6fc"}
+	bot.openIDs = []string{"all"}
 	bot.titlePrefix = "[SHANGHAI]"
 	bot.metadata = map[string]string{
 		"链接": "https://www.baidu.com",
 	}
 	alerts := model.WebhookMessage{
 		Data: newAlerts(),
-		Meta: map[string]string{"group": "hello", "url": "www.baidu.com"},
+		Meta: map[string]string{
+			"group": "hello",
+		},
+		FiringAlerts: []string{
+			"CPU使用率超过90% - instance: web-server-01, value: 95%",
+			"内存使用率超过85% - instance: web-server-01, value: 88%",
+		},
+		ResolvedAlerts: []string{
+			"磁盘使用率过高 - instance: web-server-01 - 已恢复",
+		},
 	}
 	err = bot.Send(&alerts)
 	spew.Dump(err)
@@ -71,29 +80,56 @@ func newAlerts() template.Data {
 			template.Alert{
 				Status: "firing",
 				Annotations: map[string]string{
-					"description": "26.09% throttling of CPU in namespace monitoring for container node-exporter in pod node-exporter-h5sjn" + string(bs),
+					"description": "26.09% throttling of CPU in namespace monitoring for container node-exporter in pod node-exporter-h5sjn",
 					"runbook_url": "https://github.com/kubernetes-monitoring/kubernetes-mixin/tree/master/runbook.md#alert-name-cputhrottlinghigh",
 					"summary":     "summary",
+					"handling":    "检查系统负载和进程",
+					"level":       "P0",
+					"link":        "www.baidu.com",
+					"title":       "CPU使用率过高告警",
+					"openIds":     "all",
+					"teams":       "ou_70d31b7942cfb673038292e43daaa9c3",
 				},
-				Labels:       map[string]string{"severity": "info", "m_key": "m_value"},
+				Labels: map[string]string{
+					"severity": "info",
+					"m_key":    "m_value",
+				},
 				StartsAt:     time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC),
 				EndsAt:       time.Date(2000, 1, 1, 0, 0, 1, 0, time.UTC),
 				GeneratorURL: "file://generatorUrl",
 			},
-			template.Alert{
-				Annotations: map[string]string{
-					"description": "\u001b26.09% throttling of CPU in namespace monitoring for container node-exporter in pod node-exporter-h5sjn",
-				},
-				Labels:   map[string]string{"l_key_warn": "l_value_warn"},
-				Status:   "resolved",
-				StartsAt: time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC),
-			},
+			//template.Alert{
+			//	Annotations: map[string]string{
+			//		"description": "26.09% throttling of CPU in namespace monitoring for container node-exporter in pod node-exporter-h5sjn",
+			//		"handling":    "tttt",
+			//		"level":       "P1",
+			//	},
+			//	Labels: map[string]string{
+			//		"l_key_warn": "l_value_warn",
+			//	},
+			//	Status:   "resolved",
+			//	StartsAt: time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC),
+			//	EndsAt:   time.Date(2001, 3, 1, 0, 0, 0, 0, time.UTC),
+			//},
 		},
-		CommonAnnotations: map[string]string{"ca_key": "ca_value"},
-		CommonLabels:      map[string]string{"cl_key": "cl_value"},
-		GroupLabels:       map[string]string{"gl_key": "gl_value"},
-		ExternalURL:       "file://externalUrl",
-		Receiver:          "test-receiver",
+		CommonAnnotations: map[string]string{
+			"ca_key":   "ca_value",
+			"handling": "gg",
+			//"runbook_url": "",
+
+		},
+		CommonLabels: map[string]string{
+			"cl_key":      "cl_value",
+			"service":     "ser",
+			"environment": "dev",
+			"namespace":   "namespace",
+			"instance":    "instance",
+			"alertname":   "test22",
+		},
+		GroupLabels: map[string]string{"gl_key": "gl_value"},
+		ExternalURL: "www.baidu.com",
+		Receiver:    "test-receiver",
+		Status:      "firing",
 	}
 }
 

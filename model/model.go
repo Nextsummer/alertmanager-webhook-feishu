@@ -1,6 +1,8 @@
 package model
 
-import "github.com/prometheus/alertmanager/template"
+import (
+	"github.com/prometheus/alertmanager/template"
+)
 
 type WebhookMessage struct {
 	// reference: https://prometheus.io/docs/alerting/latest/notifications/
@@ -15,6 +17,13 @@ type WebhookMessage struct {
 	FiringAlerts   []string
 	ResolvedAlerts []string
 	TitlePrefix    string
+
+	SubTitle     string `json:"subtitle"`
+	WebHookToken string `json:"webHookToken"`
+	Teams        []string
+	Level        string
+	Link         string
+	ButtonName   string
 }
 
 type Alert template.Alert

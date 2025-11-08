@@ -11,6 +11,7 @@ import (
 	"github.com/xujiahua/alertmanager-webhook-feishu/feishu/rotate"
 	"github.com/xujiahua/alertmanager-webhook-feishu/model"
 	"github.com/xujiahua/alertmanager-webhook-feishu/tmpl"
+	"sort"
 	"strings"
 	"text/template"
 	"time"
@@ -107,39 +108,166 @@ func getTemplates(tmplConf *config.Template) (*template.Template, *template.Temp
 }
 
 func (b Bot) Send(alerts *model.WebhookMessage) error {
-	// attach @xxx
-	if b.rotator != nil {
-		alerts.OpenIDs = b.rotator.Rotate(time.Now())
-	} else {
-		alerts.OpenIDs = b.openIDs
-	}
-	// title prefix
-	alerts.TitlePrefix = b.titlePrefix
-
-	// merge metadata
-	alerts.Meta = mergeMap(alerts.Meta, b.metadata)
-
-	// prepare data
-	err := b.preprocessAlerts(alerts)
-	if err != nil {
-		return err
-	}
-
-	var buf bytes.Buffer
-	err = b.tpl.Execute(&buf, alerts)
-	if err != nil {
-		return err
-	}
-	if logrus.IsLevelEnabled(logrus.DebugLevel) {
-		if d, err := beautifyJSON(buf.String()); err != nil {
-			logrus.Error(err)
-			fmt.Println(buf.String())
+	extractUniqueValues(alerts)
+	if len(alerts.OpenIDs) == 0 {
+		// attach @xxx
+		if b.rotator != nil {
+			alerts.OpenIDs = b.rotator.Rotate(time.Now())
 		} else {
-			fmt.Println(d)
+			alerts.OpenIDs = b.openIDs
 		}
 	}
 
+	processAlertMessage(alerts)
+
+	// title prefix
+	//alerts.TitlePrefix = b.titlePrefix
+
+	// merge metadata
+	//alerts.Meta = mergeMap(alerts.Meta, b.metadata)
+
+	//err := b.preprocessAlerts(alerts)
+	//if err != nil {
+	//	return err
+	//}
+
+	marshal, _ := json.Marshal(alerts)
+	logrus.Infof("request feishu body: %s\n", string(marshal))
+	var buf bytes.Buffer
+	err := b.tpl.Execute(&buf, alerts)
+	if err != nil {
+		return err
+	}
+	if logrus.IsLevelEnabled(logrus.InfoLevel) {
+		if d, err := beautifyJSON(buf.String()); err != nil {
+			logrus.Error(err)
+			logrus.Infoln(buf.String())
+		} else {
+			logrus.Infoln(d)
+		}
+	}
+
+	if webHookToken, ok := alerts.CommonAnnotations["webHookToken"]; ok {
+		b.webhook = "https://open.feishu.cn/open-apis/bot/v2/hook/" + webHookToken
+	}
+
 	return b.sdk.WebhookV2(b.webhook, &buf)
+}
+
+func extractUniqueValues(alerts *model.WebhookMessage) {
+	alerts.OpenIDs = []string{}
+	alerts.Teams = []string{}
+
+	openIDSet := make(map[string]bool)
+	teamSet := make(map[string]bool)
+
+	for _, alert := range alerts.Alerts.Firing() {
+		extractFromAnnotation(alert.Annotations, "openIds", openIDSet)
+		extractFromAnnotation(alert.Annotations, "teams", teamSet)
+	}
+
+	alerts.OpenIDs = mapToSlice(openIDSet)
+	alerts.Teams = mapToSlice(teamSet)
+}
+
+func extractFromAnnotation(annotations map[string]string, key string, targetSet map[string]bool) {
+	if value, ok := annotations[key]; ok && value != "" {
+		values := strings.Split(value, ",")
+		for _, v := range values {
+			v = strings.TrimSpace(v)
+			if v != "" {
+				targetSet[v] = true
+			}
+		}
+	}
+}
+
+func mapToSlice(stringSet map[string]bool) []string {
+	result := make([]string, 0, len(stringSet))
+	for k := range stringSet {
+		result = append(result, k)
+	}
+	sort.Strings(result)
+	return result
+}
+
+func processAlertMessage(message *model.WebhookMessage) {
+	// 设置默认值
+	message.Level = "未知"
+	message.SubTitle = message.GroupLabels["alertname"]
+	if message.SubTitle == "" {
+		message.SubTitle = "告警通知"
+	}
+
+	alerts := message.Alerts
+	if len(alerts) == 0 {
+		return
+	}
+
+	// 单个告警时直接使用第一个告警的信息
+	if len(alerts) == 1 {
+		alert := alerts[0]
+
+		if level, exists := alert.Annotations["level"]; exists && level != "" {
+			message.Level = level
+		} else if severity, exists := alert.Annotations["severity"]; exists && severity != "" {
+			message.Level = severity
+		}
+
+		// 设置标题
+		if title, exists := alert.Annotations["title"]; exists && title != "" {
+			message.SubTitle = title
+		}
+
+		if link, exists := alert.Annotations["link"]; exists && link != "" {
+			message.Link = link
+		}
+
+		if buttonName, exists := alert.Annotations["buttonName"]; exists && buttonName != "" {
+			message.ButtonName = buttonName
+		}
+		return
+	}
+
+	// 多个告警时按优先级查找
+	priorityLevels := []string{"P0", "P1", "P2", "P3", "P4"}
+
+	for _, priority := range priorityLevels {
+		for _, alert := range alerts {
+			if level, exists := alert.Annotations["level"]; exists && level == priority {
+				// 找到匹配的优先级，设置等级和标题
+				message.Level = level
+				if title, exists := alert.Annotations["title"]; exists && title != "" {
+					message.SubTitle = title
+				}
+				if link, exists := alert.Annotations["link"]; exists && link != "" {
+					message.Link = link
+				}
+				if buttonName, exists := alert.Annotations["buttonName"]; exists && buttonName != "" {
+					message.ButtonName = buttonName
+				}
+				return
+			}
+		}
+	}
+
+	// 如果没有找到优先级等级，使用第一个告警的信息
+	firstAlert := alerts[0]
+	if level, exists := firstAlert.Annotations["level"]; exists && level != "" {
+		message.Level = level
+	} else if severity, exists := firstAlert.Annotations["severity"]; exists && severity != "" {
+		message.Level = severity
+	}
+
+	if title, exists := firstAlert.Annotations["title"]; exists && title != "" {
+		message.SubTitle = title
+	}
+	if link, exists := firstAlert.Annotations["link"]; exists && link != "" {
+		message.Link = link
+	}
+	if buttonName, exists := firstAlert.Annotations["buttonName"]; exists && buttonName != "" {
+		message.ButtonName = buttonName
+	}
 }
 
 // right is immutable

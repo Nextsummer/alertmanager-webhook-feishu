@@ -1,50 +1,74 @@
 {{- /*gotype: github.com/xujiahua/alertmanager-webhook-feishu/model.WebhookMessage*/ -}}
 {
-"msg_type": "interactive",
-"card":
-{
-"header": {
-"title": {
-"tag": "plain_text",
-"content": "{{.TitlePrefix}}{{if in .GroupLabels "alertname"}}{{.GroupLabels.alertname}} {{end}}{{if len .FiringAlerts}}[{{len .FiringAlerts}}] Firing {{end}}{{if len .ResolvedAlerts}}[{{len .ResolvedAlerts}}] Resolved{{end}}"
-},
-"template":"{{if len .FiringAlerts}}red{{else}}green{{end}}"
-},
-
-"elements": [
-{{range .FiringAlerts}}
-    {
-    "tag": "div",
-    "text": {
-    "tag": "lark_md",
-    "content": "{{.}}"
+  "msg_type": "interactive",
+  "card": {
+    "schema": "2.0",
+    "config": {
+      "update_multi": true,
+      "style": {
+        "text_size": {
+          "normal_v2": {
+            "default": "normal",
+            "pc": "normal",
+            "mobile": "heading"
+          }
+        }
+      }
+    },
+    "header": {
+      "title": {
+        "tag": "plain_text",
+        "content": "{{if eq .Status "firing"}}🚨 {{else}}✅ {{end}}{{.Level}} 告警: {{.SubTitle | default "Unknown"}}"
+      },
+      "subtitle": {
+        "tag": "plain_text",
+        "content": "{{.CommonLabels.alertname}}"
+      },
+      "template": "{{if eq .Status "firing"}}red{{else}}green{{end}}",
+      "padding": "12px 12px 12px 12px"
+    },
+    "body": {
+      "direction": "vertical",
+      "padding": "12px 12px 12px 12px",
+      "elements": [
+        {
+          "tag": "markdown",
+          "content": "**📊 告警概览**\n- **状态**: {{if eq .Status "firing"}}🚨 触发{{else}}✅ 恢复{{end}}\n- **等级**: {{.Level | default .CommonLabels.severity | default "未知"}}\n",
+          "text_align": "left",
+          "margin": "0px 0px 0px 0px"
+        },
+       {
+         "tag": "markdown",
+         "content": "**📋 告警详情**\n{{range $index, $alert := .Alerts}}\n{{if gt (len $.Alerts) 1}}\n---\n**告警 {{add $index 1}}**\n{{else}}\n\n{{end}}- **状态**: {{$alert.Status | default "unknown"}}\n{{if gt (len $.Alerts) 1}}{{if $alert.Annotations.level}}- **等级**: {{$alert.Annotations.level}}\n{{else if $alert.Labels.severity}}- **等级**: {{$alert.Labels.severity}}\n{{end}}{{end}}- **触发时间**: {{$alert.StartsAt.Format "2006-01-02 15:04:05"}}\n{{if and (eq $alert.Status "resolved") (not $alert.EndsAt.IsZero)}}- **恢复时间**: {{$alert.EndsAt.Format "2006-01-02 15:04:05"}}\n{{end}}\n{{if $alert.Labels.desc}}- **描述**: {{$alert.Labels.desc | default "无描述"}}\n{{else if $alert.Annotations.description}}- **描述**: {{$alert.Annotations.description | default "无描述"}}\n{{end}}\n{{if and (ne $alert.Status "resolved") ($alert.Annotations.handling)}}- **处理建议**: {{$alert.Annotations.handling}}\n{{end}}\n{{if $alert.Labels}}- **标签信息**:\n{{range $key, $value := $alert.Labels}}  - {{$key}}: {{$value | truncate 50}}\n{{end}}{{end}}\n{{else}}无告警详情{{end}}",
+         "text_align": "left",
+         "text_size": "normal_v2",
+         "margin": "0px 0px 0px 0px"
+       },
+        {
+          "tag": "button",
+          "text": {
+            "tag": "plain_text",
+            "content": "{{.ButtonName | default "📊 查看详情"}} "
+          },
+          "type": "default",
+          "width": "default",
+          "size": "medium",
+          "behaviors": [
+            {
+              "type": "open_url",
+              "default_url": "{{.Link}}"
+            }
+          ],
+          "margin": "0px 0px 0px 0px"
+        },
+        {
+            "tag": "div",
+            "text": {
+              "tag": "lark_md",
+              "content": "{{- if .Teams}}👥 负责人: {{range .Teams}}<at id={{.}}></at>{{end}}{{end}}\n{{- if .OpenIDs}}🔔 通知: {{range .OpenIDs}}<at id={{.}}></at>{{end}}{{end}}"
+            }
+          }
+      ]
     }
-    },
-    {
-    "tag": "hr"
-    },
-{{ end }}
-{{ range .ResolvedAlerts }}
-    {
-    "tag": "div",
-    "text": {
-    "tag": "lark_md",
-    "content": "{{.}}"
-    }
-    },
-    {
-    "tag": "hr"
-    },
-{{ end }}
-{
-"tag": "note",
-"elements": [
-{
-"tag": "lark_md",
-"content": "{{range .Meta.SortedPairs}}{{ displayKV .Name .Value}}\t{{end}}{{range .OpenIDs}}<at id={{.}}></at> {{end}}"
-}
-]
-}
-]
-}
+  }
 }
