@@ -168,7 +168,7 @@ groups:
       # 通知人，在飞书中需要指定openid，多个用逗号分隔。all代表所有人
       openIds: all
       # 负责人的openid
-      teams: ou_70d31b7942cfb673038292e43daaa9c3
+      teams: ou_xxx
       # 群机器人token，不传时则使用默认配置的token
-      webHookToken: 90626006-60f1-44f7-9234-fe8d44f89256
+      webHookToken: xxxx
 ```
